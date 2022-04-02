@@ -1,0 +1,122 @@
+ if already installed)----
+install.packages("tidyverse")
+install.packages("tidytext")
+install.packages("sysfonts")
+install.packages("showtext")
+install.packages("viridis")
+install.packages("ggridges")
+
+#IMPORT LIBRARIES ----
+library(tidyverse) 
+library(tidytext)
+library(sysfonts)
+library(showtext)
+library(viridis)
+library(ggridges)
+
+#IMPORT & PREVIEW DATA ----
+#Data about Olympic Athletes from TidyTuesday - with read_csv you can read files from your local directory or from online by specifying the file path or url
+df <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-07-27/olympics.csv')
+
+#function View with dataframe name or we can click on dataframe in side console to preview
+View(df)
+
+
+#SET UP  & LOAD FONTS ----
+font_add_google("Chivo", "chivo")
+showtext_auto()
+
+#INTRO TO DPLYR- Transforming Data ----
+
+#dplyr cheatsheet pdf: https://raw.githubusercontent.com/rstudio/cheatsheets/main/data-transformation.pdf
+#filtering rows - use dplyr function, filter()
+df%>%filter(sport=="Athletics")
+
+#filtering with multiple arguments (use & for and), including variable in a list e.g. medals is either Gold, Silver, or Bronze
+df%>%filter(sport=="Athletics" & year>1948 & medal %in% c('Gold','Silver','Bronze'))
+
+#adding new rows with dplyr mutate()
+df%>%mutate(athlete_dob = year - age)
+
+#aggregate data with dplyr group_by() and summarise(). many different agg functions with summarise()!
+df%>%group_by(sex)%>%summarise(athletes = n_distinct(id), median_age = median(age, na.rm=TRUE))
+
+#putting it all together with %>%
+df%>%
+  mutate(team = case_when(team %in% c('East Germany','West Germany') ~ 'Germany', TRUE ~ team)) %>%
+  filter(sport=="Athletics",)%>%
+  mutate(athlete_dob = year-age)%>%
+  group_by(athlete_dob)%>%
+  summarise(athletes= n_distinct(id))%>%
+   arrange(-athletes)
+
+
+#PLOT 1 Bar Plot Athletics----
+
+#What are the top teams overall for each swimming style based on # of medals?
+athletics <- df%>%
+  filter(sport == 'Athletics' & year>=1948 & medal %in% c('Gold','Silver','Bronze') &  
+           event %in% c("Athletics Men's 1,500 metres","Athletics Men's 10,000 metres",
+                        "Athletics Men's 110 metres Hurdles","Athletics Men's 200 metres",
+                        "Athletics Men's 3,000 metres Steeplechase","Athletics Men's 4 x 100 metres Relay",
+                        "Athletics Men's 5,000 metres","Athletics Men's 800 metres","Athletics Women's 3,000 metres",
+                        "Athletics Men's 5,000 metres","Athletics Women’s 1,500 metres", "Athletics Women’s 10,000 metres", 
+                        "Athletics Women’s 110 metres Hurdles","Athletics Women’s 200 metres","Athletics Women’s 3,000 metres Steeplechase",
+                        "Athletics Women’s 4 x 100 metres Relay","Athletics Women’s 5,000 metres","Athletics Women’s 800 metres",
+                        "Athletics Women’s 3,000 metres","Athletics Women’s 5,000 metres"))%>%
+   #split column "event" into two new columns - metres and style - based on delimiter. e.g. "400 metres Freestyle"
+   #aggregate medal count by team and event
+  group_by(team, event)%>%
+  summarise(medals = n())%>%
+  arrange(-medals)
+
+#preview data
+athletics
+
+#narrow it down to top teams by style
+athletics_top<-athletics%>%
+  #filter to get top teams by event  using group_by & slice_max
+  group_by(event)%>%
+  slice_max(order_by=medals, n=8)
+
+#start off small - let's look at Freestyle data only for our first plot
+Steeplechase_top<-athletics_top%>%filter(event=="Athletics Men's 3,000 metres Steeplechase")
+
+#our first ggplot 
+ggplot(data=Steeplechase_top, aes(x=medals, y=team))+
+  geom_bar(stat="identity")
+
+#sorting bars with reorder(), layering with new geom to add text
+bar<-ggplot(data=Steeplechase_top, aes(y=reorder(team,medals), x=medals))+
+  geom_bar(stat="identity", fill="#44355B")+
+  geom_text(aes(label=medals), color="white", hjust=1.5, size=3)
+
+bar
+
+#adding our labels with labs()
+bar_2<-bar+
+  labs(title="Athletics Men's 3,000 metres Steeplechase- Top Teams",
+       subtitle="Data from 1948 to 2016",
+       x="Medals",
+       y="Team",
+       caption="Data from www.sports.reference.com | Graphic by @Erick Yegon")
+
+bar_2
+
+#adding a custom theme with theme()
+bar_3<-bar_2+
+  theme(text = element_text(family="chivo"),
+        plot.title=element_text(face="bold"))
+
+bar_3
+
+#Plotting Multiple Bar Charts in One - facet_wrap()
+ggplot(data=athletics)+
+  geom_bar(aes(y=team, x=medals, fill=medals), stat="identity")+
+  geom_text(aes(y=team, x=medals, label=medals), hjust=1.4, size=3, color="white")+
+  facet_wrap(~event, scales="free")+
+  labs(title="Top Teams in Athletics",
+       subtitle="Data from 1948 to 2016",
+       x="Medals",
+       y="Team",
+       caption="Data from www.sports.reference.com | Graphic by @Erick Yegon")
